@@ -104,7 +104,7 @@ pval <- sum(null_dist >= dif)/length(null_dist)
 pval
 ```
 
-Conclusion: The p value is 0, which is less than our cut off of 0.05, meaning that we reject the null hypothesis.
+Conclusion: The p value is 0, which is less than our cut off of 0.05, meaning that we reject the null hypothesis. In our permutations of our sample, 0% of homes built after 1970 have greater average lead levels than those built before 1970.
 
 ::: {.callout-note}
 
@@ -128,8 +128,8 @@ joined_freeway <- left_join(soil_avg, property, by = 'property_id') |>
 
 ```{r}
 p2 <- ggplot(joined_freeway, aes(x = avg_lead, fill = freeway_1km)) +
-  geom_histogram()
-
+  geom_histogram() +
+  labs(title = 'Average lead levels of homes near vs far from freeways', x = 'lead concentration (ppm)')
 p2
 ```
 
@@ -177,9 +177,10 @@ area_95ci <- quantile(freeway_samp_dist, c(.025, .975))
 tibble(diff_props = freeway_samp_dist) |>
   ggplot(aes(x = diff_props)) +
   geom_histogram() +
-  geom_vline(aes(xintercept = dif_freeway)) +
+  geom_vline(aes(xintercept = dif_freeway, color = 'observed')) +
   geom_vline(aes(xintercept = area_95ci[1]), linetype = 'dashed') +
   geom_vline(aes(xintercept = area_95ci[2]), linetype = 'dashed') +
+  scale_color_manual(values = c(observed = "blue")) +
   labs(title = 'Mean difference in lead of homes within 1km of freeway vs outside', x = 'lead (ppm)')
 ```
 
@@ -204,86 +205,27 @@ data <- rnorm(1000, mean = 5, sd = 1)
 ```
 
 ```{r}
-pop <- data.frame(
-  value = sample(data),
-  label = sample(c(rep("a", 25), rep("b", 25)))
-)
-```
+df_data <- data.frame(data) 
 
-```{r}
-p3 <- ggplot(pop, aes(x = value, fill = label)) +
-  geom_histogram()
-
-p3
-```
-
-```{r}
-# calculate observed difference in means (a - b)
-pop_avgs <- pop |> 
-  summarize(means = mean(value), .by = label) |> 
-  arrange(label)
-pop_dif = 0
-#pop_dif <- pop_avgs$means[1] - pop_avgs$means[2]
-```
-
-```{r}
-p_dist <- replicate(100, 
-  {
-    # permutation test
-    pop_null_dist <- replicate(
-      50,
-      {
-        # put your "shuffle once" code in here, to repeat it 10,000 times
-        shuffled <- pop |> 
-            mutate(shuffled_lbls = sample(label)) |> 
-            summarize(means = mean(value), .by = shuffled_lbls) |> 
-            arrange(shuffled_lbls)
-
-        # get the difference in proportions between the two groups
-        shuffled_dif <- shuffled$means[2] - shuffled$means[1]
-        shuffled_dif
-      }
-    )
-
-    pval <- sum(pop_null_dist >= pop_dif) / length(pop_null_dist) # the proportion of null distribution values greater than or equal to the observed statistic
-    pval
-  }
-)
-```
-
-
-```{r}
-tibble(p_vals = p_dist) |>
-  ggplot(aes(x = p_vals)) +
-  geom_histogram() +
-  geom_vline(aes(xintercept = 0.05), color = 'red') +
-  labs(title = 'Distribution of p values for permutations of a null distribution', x = 'p value')
-```
-
-### try gita way (faster!)
-
-```{r}
-data <- rnorm(1000, mean = 5, sd = 1)
-```
-
-```{r}
-pop1 <- data.frame(
-  a = sample(data),
-  b = sample(data)
-)
-```
-
-```{r}
-# calculate observed difference in means (a - b)
-pop_avgs_dif1 <- mean(pop1$a) - mean(pop1$b)
+ggplot(df_data, aes(x = data)) +
+  geom_density() +
+  labs(title = 'Probability Density Function of Simulated Data (mean = 5, sd = 1)', x = 'values')
 ```
 
 ```{r}
 p_dist1 <- replicate(1000, 
   {
+    # draw a new 50 from 1000
+    pop1 <- data.frame(
+      a = sample(data, 25),
+      b = sample(data, 25)
+    )
+
+    pop_avgs_dif1 <- mean(pop1$a) - mean(pop1$b)
+
     # permutation test
     pop_null_dist <- replicate(
-      1e4,
+      10000,
       {
         # put your "shuffle once" code in here, to repeat it 10,000 times
         comb <- c(pop1$a, pop1$b)
@@ -304,10 +246,20 @@ p_dist1 <- replicate(1000,
 ```
 
 ```{r}
-tibble(p_vals = p_dist1) |>
+p_val_df <- tibble(p_vals = p_dist1)
+```
+
+```{r}
+ p_val_df |>
   ggplot(aes(x = p_vals)) +
   geom_histogram() +
+  geom_histogram(data = subset(p_val_df, p_val_df < 0.05), fill = 'blue') +
   geom_vline(aes(xintercept = 0.05), color = 'red') +
   labs(title = 'Distribution of p values for permutations of a null distribution', x = 'p value')
 ```
 
+
+```{r}
+# verify we get around 5% of "significant" p values
+mean(p_val_df$p_vals < 0.05)
+```
