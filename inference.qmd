@@ -34,6 +34,14 @@ soil_avg <- soil |> summarize(avg_lead = mean(pb_ppm), .by = property_id)
 joined <- left_join(soil_avg, property, by = 'property_id') |> mutate(before_1970 = year_built < 1970)
 ```
 
+visualize raw data
+```{r}
+p1 <- ggplot(joined, aes(x = avg_lead, fill = before_1970)) +
+  geom_histogram()
+
+p1
+```
+
 ```{r}
 # count how many empty values are in the year_built col
 sum(is.na(joined$year_built))
@@ -90,7 +98,8 @@ tibble(diff_props = null_dist) |>
 ```
 
 ```{r}
-pval <- sum(null_dist >= dif) # the proportion of null distribution values greater than or equal to the observed statistic
+pval <- sum(null_dist >= dif)/length(null_dist) 
+# the proportion of null distribution values greater than or equal to the observed statistic
 
 pval
 ```
@@ -115,6 +124,13 @@ Estimate a confidence interval to investigate the following question:
 # join tables and add 'label' column for permutation
 joined_freeway <- left_join(soil_avg, property, by = 'property_id') |> 
   mutate(freeway_1km = dist_to_freeway_m <= 1000)
+```
+
+```{r}
+p2 <- ggplot(joined_freeway, aes(x = avg_lead, fill = freeway_1km)) +
+  geom_histogram()
+
+p2
 ```
 
 ```{r}
@@ -183,12 +199,22 @@ To simulate a negative result, perform the following.
 
 When you're done, verify that your p-value is less than 0.05 in approximately 5% (50) of your simulations.
 
+```{r}
+data <- rnorm(1000, mean = 5, sd = 1)
+```
 
 ```{r}
 pop <- data.frame(
-  value = rnorm(50, mean = 5, sd = 1),
-  label = sample(c("a", "b"), 50, replace = TRUE)
+  value = sample(data),
+  label = sample(c(rep("a", 25), rep("b", 25)))
 )
+```
+
+```{r}
+p3 <- ggplot(pop, aes(x = value, fill = label)) +
+  geom_histogram()
+
+p3
 ```
 
 ```{r}
@@ -196,22 +222,21 @@ pop <- data.frame(
 pop_avgs <- pop |> 
   summarize(means = mean(value), .by = label) |> 
   arrange(label)
-
-pop_dif <- pop_avgs$means[1] - pop_avgs$means[2]
+pop_dif = 0
+#pop_dif <- pop_avgs$means[1] - pop_avgs$means[2]
 ```
 
 ```{r}
-p_dist <- replicate(1000, 
+p_dist <- replicate(100, 
   {
     # permutation test
     pop_null_dist <- replicate(
-      1e4,
+      50,
       {
         # put your "shuffle once" code in here, to repeat it 10,000 times
         shuffled <- pop |> 
             mutate(shuffled_lbls = sample(label)) |> 
-            group_by(shuffled_lbls) |> 
-            summarize(means = mean(value)) |> 
+            summarize(means = mean(value), .by = shuffled_lbls) |> 
             arrange(shuffled_lbls)
 
         # get the difference in proportions between the two groups
@@ -231,6 +256,58 @@ p_dist <- replicate(1000,
 tibble(p_vals = p_dist) |>
   ggplot(aes(x = p_vals)) +
   geom_histogram() +
-  geom_vline(aes(xintercept = pop_dif)) +
+  geom_vline(aes(xintercept = 0.05), color = 'red') +
   labs(title = 'Distribution of p values for permutations of a null distribution', x = 'p value')
 ```
+
+### try gita way (faster!)
+
+```{r}
+data <- rnorm(1000, mean = 5, sd = 1)
+```
+
+```{r}
+pop1 <- data.frame(
+  a = sample(data),
+  b = sample(data)
+)
+```
+
+```{r}
+# calculate observed difference in means (a - b)
+pop_avgs_dif1 <- mean(pop1$a) - mean(pop1$b)
+```
+
+```{r}
+p_dist1 <- replicate(1000, 
+  {
+    # permutation test
+    pop_null_dist <- replicate(
+      1e4,
+      {
+        # put your "shuffle once" code in here, to repeat it 10,000 times
+        comb <- c(pop1$a, pop1$b)
+        samp_combined <- sample(comb)
+        shuffled <- data.frame(
+          a = samp_combined[1:25],
+          b = samp_combined[26:50]
+        )
+        # calculate observed difference in means (a - b)
+        pop_avgs_dif1 <- mean(shuffled$a) - mean(shuffled$b)
+      }
+    )
+
+    pval <- sum(pop_null_dist >= pop_avgs_dif1) / length(pop_null_dist) # the proportion of null distribution values greater than or equal to the observed statistic
+    pval
+  }
+)
+```
+
+```{r}
+tibble(p_vals = p_dist1) |>
+  ggplot(aes(x = p_vals)) +
+  geom_histogram() +
+  geom_vline(aes(xintercept = 0.05), color = 'red') +
+  labs(title = 'Distribution of p values for permutations of a null distribution', x = 'p value')
+```
+
