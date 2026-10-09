@@ -37,7 +37,8 @@ joined <- left_join(soil_avg, property, by = 'property_id') |> mutate(before_197
 visualize raw data
 ```{r}
 p1 <- ggplot(joined, aes(x = avg_lead, fill = before_1970)) +
-  geom_histogram()
+  geom_histogram() +
+  labs(title = 'Avg lead levels of houses built before and after 1970')
 
 p1
 ```
